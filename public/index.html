@@ -32,7 +32,10 @@
     <!-- Top nav -->
     <nav id="topNav" class="top-nav">
       <div class="nav-brand">Yaro Network Tool</div>
-      <div class="nav-links">
+      <button class="hamburger" id="hamburger" aria-label="Menu">
+        <span></span><span></span><span></span>
+      </button>
+      <div class="nav-links" id="navLinks">
         <a href="#" data-page="dashboard">Главная</a>
         <a href="#" data-page="connection">Подключение</a>
         <a href="#" data-page="extend">Продление</a>
@@ -40,8 +43,8 @@
         <a href="#" data-page="download">Скачать</a>
         <a href="#" data-page="help">Помощь</a>
         <a href="#" data-page="admin" id="navAdmin" style="display:none">Админ</a>
+        <button class="btn btn-sm btn-secondary nav-logout" id="btnLogout">Выйти</button>
       </div>
-      <button class="btn btn-sm btn-secondary" id="btnLogout">Выйти</button>
     </nav>
 
     <!-- Pages -->

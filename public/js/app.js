@@ -81,7 +81,14 @@ function showApp() {
     a.addEventListener("click", (e) => {
       e.preventDefault();
       navigate(a.dataset.page);
+      // Close mobile menu after nav
+      document.getElementById("navLinks").classList.remove("open");
     });
+  });
+
+  // Hamburger toggle
+  document.getElementById("hamburger").addEventListener("click", () => {
+    document.getElementById("navLinks").classList.toggle("open");
   });
 
   // Logout
