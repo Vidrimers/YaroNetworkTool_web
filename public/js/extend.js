@@ -43,8 +43,19 @@ export function renderExtend(el) {
       const uuid = getClientUuid();
       if (!uuid) return;
       try {
+        // Получаем telegram_id из JWT токена
+        const token = localStorage.getItem("vpn_token");
+        let telegram_id = null;
+        if (token) {
+          try {
+            const payload = JSON.parse(atob(token.split(".")[1]));
+            telegram_id = payload.telegram_id;
+          } catch {}
+        }
+        
         await api("POST", "/api/extension-requests/create", {
           client_uuid: uuid,
+          telegram_id: telegram_id || 0,
           requested_months: selected,
         });
         toast("Запрос отправлен");
