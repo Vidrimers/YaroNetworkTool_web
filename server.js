@@ -304,6 +304,18 @@ app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
+// --- Error handlers ---
+// Catch path traversal attacks (URIError from malformed URLs)
+app.use((err, req, res, next) => {
+  if (err instanceof URIError) {
+    return res.status(400).json({ error: "Bad Request" });
+  }
+  if (err.type === "entity.parse.failed") {
+    return res.status(400).json({ error: "Invalid JSON" });
+  }
+  next(err);
+});
+
 app.listen(PORT, () => {
   console.log(`Yaro Network Tool Portal started on http://localhost:${PORT}`);
 });
