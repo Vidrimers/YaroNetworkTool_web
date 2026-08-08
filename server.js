@@ -73,6 +73,23 @@ function verifyToken(req, res, next) {
   }
 }
 
+// --- Admin-only middleware ---
+function requireAdmin(req, res, next) {
+  if (!req.user?.admin) {
+    return res.status(403).json({ message: "Admin access required" });
+  }
+  next();
+}
+
+// --- Ownership or admin middleware ---
+function requireOwnershipOrAdmin(req, res, next) {
+  const requestedUuid = req.params.uuid;
+  if (req.user?.admin || req.user?.client_uuid === requestedUuid) {
+    return next();
+  }
+  return res.status(403).json({ message: "Access denied" });
+}
+
 // --- Auth: Telegram OAuth URL ---
 app.get("/api/auth/telegram-url", (req, res) => {
   if (!TELEGRAM_BOT_TOKEN) return res.status(500).json({ message: "Bot token not configured" });
@@ -97,10 +114,19 @@ app.post("/api/auth/token", (req, res) => {
   }
 });
 
-// --- Auth: create deep-link token (called by Telegram bot) ---
+// --- Auth: create deep-link token (called by Telegram bot or admin) ---
 app.post("/api/auth/create-token", verifyToken, (req, res) => {
   const { client_uuid, admin, telegram_id } = req.body;
   if (!client_uuid) return res.status(400).json({ message: "client_uuid required" });
+  // Only admin can create tokens for other users or with admin flag
+  if (!req.user.admin) {
+    if (client_uuid !== req.user.client_uuid) {
+      return res.status(403).json({ message: "Can only create token for yourself" });
+    }
+    if (admin) {
+      return res.status(403).json({ message: "Cannot self-promote to admin" });
+    }
+  }
   const payload = { client_uuid, admin: admin || false };
   if (telegram_id) payload.telegram_id = telegram_id;
   const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "30d" });
@@ -108,7 +134,23 @@ app.post("/api/auth/create-token", verifyToken, (req, res) => {
 });
 
 // --- Auth: find client by telegram_id and issue JWT (for OAuth flow) ---
-app.get("/api/auth/find-by-telegram/:telegramId", async (req, res) => {
+// Rate limit: track attempts per IP to prevent telegram_id enumeration
+const authAttempts = new Map();
+const AUTH_RATE_LIMIT = 10;
+const AUTH_RATE_WINDOW = 60000; // 1 minute
+
+app.get("/api/auth/find-by-telegram/:telegramId", (req, res, next) => {
+  const ip = req.ip || req.connection.remoteAddress;
+  const now = Date.now();
+  const attempts = authAttempts.get(ip) || [];
+  const recent = attempts.filter(t => now - t < AUTH_RATE_WINDOW);
+  if (recent.length >= AUTH_RATE_LIMIT) {
+    return res.status(429).json({ message: "Too many attempts. Try again later." });
+  }
+  recent.push(now);
+  authAttempts.set(ip, recent);
+  next();
+}, async (req, res) => {
   try {
     const data = await vpsAPI("GET", "/api/clients");
     const clients = data.clients || data || [];
@@ -116,6 +158,7 @@ app.get("/api/auth/find-by-telegram/:telegramId", async (req, res) => {
       ? clients.find((c) => String(c.telegram_id) === String(req.params.telegramId))
       : null;
     if (!client) return res.status(404).json({ message: "Client not found" });
+    if (client.status !== "active") return res.status(403).json({ message: "Account is not active" });
     const isAdminUser = String(client.telegram_id) === String(TELEGRAM_ADMIN_ID);
     const token = jwt.sign({ client_uuid: client.uuid, admin: isAdminUser, telegram_id: client.telegram_id }, JWT_SECRET, { expiresIn: "30d" });
     res.json({ token, client_uuid: client.uuid, admin: isAdminUser });
@@ -126,8 +169,8 @@ app.get("/api/auth/find-by-telegram/:telegramId", async (req, res) => {
 
 // --- Proxy: all client API calls to VPS ---
 
-// Client info
-app.get("/api/clients/:uuid", verifyToken, async (req, res) => {
+// Client info (own data or admin)
+app.get("/api/clients/:uuid", verifyToken, requireOwnershipOrAdmin, async (req, res) => {
   try {
     res.json(await vpsAPI("GET", `/api/clients/${req.params.uuid}`));
   } catch (err) {
@@ -135,8 +178,8 @@ app.get("/api/clients/:uuid", verifyToken, async (req, res) => {
   }
 });
 
-// All clients (admin)
-app.get("/api/clients", verifyToken, async (req, res) => {
+// All clients (admin only)
+app.get("/api/clients", verifyToken, requireAdmin, async (req, res) => {
   try {
     res.json(await vpsAPI("GET", "/api/clients"));
   } catch (err) {
@@ -144,8 +187,8 @@ app.get("/api/clients", verifyToken, async (req, res) => {
   }
 });
 
-// Traffic stats
-app.get("/api/clients/:uuid/traffic-stats", verifyToken, async (req, res) => {
+// Traffic stats (own data or admin)
+app.get("/api/clients/:uuid/traffic-stats", verifyToken, requireOwnershipOrAdmin, async (req, res) => {
   try {
     res.json(await vpsAPI("GET", `/api/clients/${req.params.uuid}/traffic-stats`));
   } catch (err) {
@@ -153,8 +196,8 @@ app.get("/api/clients/:uuid/traffic-stats", verifyToken, async (req, res) => {
   }
 });
 
-// Subscription
-app.get("/api/clients/:uuid/subscription", verifyToken, async (req, res) => {
+// Subscription (own data or admin)
+app.get("/api/clients/:uuid/subscription", verifyToken, requireOwnershipOrAdmin, async (req, res) => {
   try {
     res.json(await vpsAPI("GET", `/api/clients/${req.params.uuid}/subscription`));
   } catch (err) {
@@ -162,8 +205,8 @@ app.get("/api/clients/:uuid/subscription", verifyToken, async (req, res) => {
   }
 });
 
-// Subscription URL (returns base64, decoded here)
-app.get("/api/subscription/:uuid", verifyToken, async (req, res) => {
+// Subscription URL (own data or admin)
+app.get("/api/subscription/:uuid", verifyToken, requireOwnershipOrAdmin, async (req, res) => {
   try {
     const resp = await fetch(`${VPS_API_URL}/subscription/${req.params.uuid}`, {
       headers: { Authorization: `Bearer ${VPS_API_KEY}` },
@@ -182,67 +225,77 @@ app.get("/api/subscription/:uuid", verifyToken, async (req, res) => {
 
 // --- Admin-only proxy routes ---
 
-// Client CRUD
-app.post("/api/clients", verifyToken, async (req, res) => {
+// Client CRUD (admin only)
+app.post("/api/clients", verifyToken, requireAdmin, async (req, res) => {
   try { res.json(await vpsAPI("POST", "/api/clients", req.body)); } catch (err) { res.status(500).json({ message: err.message }); }
 });
-app.put("/api/clients/:uuid", verifyToken, async (req, res) => {
+app.put("/api/clients/:uuid", verifyToken, requireAdmin, async (req, res) => {
   try { res.json(await vpsAPI("PUT", `/api/clients/${req.params.uuid}`, req.body)); } catch (err) { res.status(500).json({ message: err.message }); }
 });
-app.delete("/api/clients/:uuid", verifyToken, async (req, res) => {
+app.delete("/api/clients/:uuid", verifyToken, requireAdmin, async (req, res) => {
   try { res.json(await vpsAPI("DELETE", `/api/clients/${req.params.uuid}`)); } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-// Client actions
-app.post("/api/clients/:uuid/extend", verifyToken, async (req, res) => {
+// Client actions (admin only)
+app.post("/api/clients/:uuid/extend", verifyToken, requireAdmin, async (req, res) => {
   try { res.json(await vpsAPI("POST", `/api/clients/${req.params.uuid}/extend`, req.body)); } catch (err) { res.status(500).json({ message: err.message }); }
 });
-app.post("/api/clients/:uuid/block", verifyToken, async (req, res) => {
+app.post("/api/clients/:uuid/block", verifyToken, requireAdmin, async (req, res) => {
   try { res.json(await vpsAPI("POST", `/api/clients/${req.params.uuid}/block`, req.body)); } catch (err) { res.status(500).json({ message: err.message }); }
 });
-app.post("/api/clients/:uuid/unblock", verifyToken, async (req, res) => {
+app.post("/api/clients/:uuid/unblock", verifyToken, requireAdmin, async (req, res) => {
   try { res.json(await vpsAPI("POST", `/api/clients/${req.params.uuid}/unblock`)); } catch (err) { res.status(500).json({ message: err.message }); }
 });
-app.post("/api/clients/:uuid/warn", verifyToken, async (req, res) => {
+app.post("/api/clients/:uuid/warn", verifyToken, requireAdmin, async (req, res) => {
   try { res.json(await vpsAPI("POST", `/api/clients/${req.params.uuid}/warn`, req.body)); } catch (err) { res.status(500).json({ message: err.message }); }
 });
-app.post("/api/clients/:uuid/reset-warnings", verifyToken, async (req, res) => {
+app.post("/api/clients/:uuid/reset-warnings", verifyToken, requireAdmin, async (req, res) => {
   try { res.json(await vpsAPI("POST", `/api/clients/${req.params.uuid}/reset-warnings`)); } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-// Traffic reset
-app.post("/api/stats/clients/:uuid/reset", verifyToken, async (req, res) => {
+// Traffic reset (admin only)
+app.post("/api/stats/clients/:uuid/reset", verifyToken, requireAdmin, async (req, res) => {
   try { res.json(await vpsAPI("POST", `/api/stats/clients/${req.params.uuid}/reset`)); } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
 // Extension requests
 app.get("/api/extension-requests", verifyToken, async (req, res) => {
   try {
-    const qs = req.query.client_uuid ? `?client_uuid=${req.query.client_uuid}` : "";
+    // Non-admin users can only see their own requests
+    let qs = "";
+    if (!req.user.admin) {
+      qs = `?client_uuid=${req.user.client_uuid}`;
+    } else if (req.query.client_uuid) {
+      qs = `?client_uuid=${req.query.client_uuid}`;
+    }
     res.json(await vpsAPI("GET", `/api/extension-requests${qs}`));
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 app.post("/api/extension-requests/create", verifyToken, async (req, res) => {
+  // Users can only create requests for themselves
+  if (!req.user.admin && req.body.client_uuid !== req.user.client_uuid) {
+    return res.status(403).json({ message: "Can only create request for yourself" });
+  }
   try { res.json(await vpsAPI("POST", "/api/extension-requests/create", req.body)); } catch (err) { res.status(500).json({ message: err.message }); }
 });
-app.post("/api/extension-requests/:id/approve", verifyToken, async (req, res) => {
+app.post("/api/extension-requests/:id/approve", verifyToken, requireAdmin, async (req, res) => {
   try { res.json(await vpsAPI("POST", `/api/extension-requests/${req.params.id}/approve`, req.body)); } catch (err) { res.status(500).json({ message: err.message }); }
 });
-app.post("/api/extension-requests/:id/deny", verifyToken, async (req, res) => {
+app.post("/api/extension-requests/:id/deny", verifyToken, requireAdmin, async (req, res) => {
   try { res.json(await vpsAPI("POST", `/api/extension-requests/${req.params.id}/deny`, req.body)); } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-// --- Xray service management (proxied to VPS) ---
-app.get("/api/xray/status", verifyToken, async (req, res) => {
+// --- Xray service management (admin only, proxied to VPS) ---
+app.get("/api/xray/status", verifyToken, requireAdmin, async (req, res) => {
   try { res.json(await vpsAPI("GET", "/api/xray/status")); } catch (err) { res.status(500).json({ message: err.message }); }
 });
-app.post("/api/xray/service/:action", verifyToken, async (req, res) => {
+app.post("/api/xray/service/:action", verifyToken, requireAdmin, async (req, res) => {
   try { res.json(await vpsAPI("POST", `/api/xray/service/${req.params.action}`)); } catch (err) { res.status(500).json({ message: err.message }); }
 });
-app.get("/api/xray/logs", verifyToken, async (req, res) => {
+app.get("/api/xray/logs", verifyToken, requireAdmin, async (req, res) => {
   try { res.json(await vpsAPI("GET", "/api/xray/logs")); } catch (err) { res.status(500).json({ message: err.message }); }
 });
-app.post("/api/xray/checkers/:script", verifyToken, async (req, res) => {
+app.post("/api/xray/checkers/:script", verifyToken, requireAdmin, async (req, res) => {
   try { res.json(await adminUIAPI("POST", `/api/xray/checkers/${req.params.script}`)); } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
