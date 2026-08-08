@@ -25,7 +25,10 @@ function showModal(title, bodyHtml, buttons) {
           ).join("")}
         </div>
       </div>`;
-    document.body.appendChild(overlay);
+    // Delay adding to DOM to prevent immediate click bubbling
+    requestAnimationFrame(() => {
+      document.body.appendChild(overlay);
+    });
     overlay.addEventListener("click", e => {
       const btn = e.target.closest("[data-idx]");
       if (btn) { overlay.remove(); resolve(parseInt(btn.dataset.idx)); }
@@ -546,7 +549,8 @@ function bindAdminActions() {
           });
         });
         result.querySelectorAll("[data-deny]").forEach(btn => {
-          btn.addEventListener("click", async () => {
+          btn.addEventListener("click", async (e) => {
+            e.stopPropagation();
             console.log("[DENY] clicked, id=", btn.dataset.deny, "telegram_id=", getTelegramId());
             const reason = await promptModal("Причина отклонения", "", "Отклонено");
             if (reason === null) { console.log("[DENY] cancelled"); return; }
