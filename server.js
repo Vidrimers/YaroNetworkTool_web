@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import jwt from "jsonwebtoken";
+import crypto from "crypto";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -131,6 +132,52 @@ app.post("/api/auth/create-token", verifyToken, (req, res) => {
   if (telegram_id) payload.telegram_id = telegram_id;
   const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "30d" });
   res.json({ token });
+});
+
+// --- Auth: Telegram Mini App (verify initData) ---
+app.post("/api/auth/telegram-webapp", async (req, res) => {
+  try {
+    const { initData } = req.body;
+    if (!initData) return res.status(400).json({ message: "initData required" });
+
+    // Verify initData using HMAC-SHA256
+    const secretKey = crypto.createHmac("sha256", "WebAppData").update(TELEGRAM_BOT_TOKEN).digest();
+    const dataCheckString = new URLSearchParams(initData);
+    const hash = dataCheckString.get("hash");
+    dataCheckString.delete("hash");
+    dataCheckString.sort();
+
+    const computedHash = crypto.createHmac("sha256", secretKey).update(dataCheckString.toString()).digest("hex");
+
+    if (computedHash !== hash) {
+      return res.status(403).json({ message: "Invalid initData" });
+    }
+
+    // Parse user data
+    const user = JSON.parse(dataCheckString.get("user") || "{}");
+    const telegramId = user.id;
+
+    if (!telegramId) {
+      return res.status(400).json({ message: "User ID not found in initData" });
+    }
+
+    // Find client by telegram_id
+    const data = await vpsAPI("GET", "/api/clients");
+    const clients = data.clients || data || [];
+    const client = Array.isArray(clients)
+      ? clients.find((c) => String(c.telegram_id) === String(telegramId))
+      : null;
+
+    if (!client) return res.status(404).json({ message: "Client not found" });
+    if (client.status !== "active") return res.status(403).json({ message: "Account is not active" });
+
+    const isAdminUser = String(client.telegram_id) === String(TELEGRAM_ADMIN_ID);
+    const token = jwt.sign({ client_uuid: client.uuid, admin: isAdminUser, telegram_id: client.telegram_id }, JWT_SECRET, { expiresIn: "30d" });
+
+    res.json({ token, client_uuid: client.uuid, admin: isAdminUser });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
 });
 
 // --- Auth: find client by telegram_id and issue JWT (for OAuth flow) ---

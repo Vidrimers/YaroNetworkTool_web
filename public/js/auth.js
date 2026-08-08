@@ -1,8 +1,32 @@
-// --- Auth: deep-link token + Telegram OAuth ---
+// --- Auth: deep-link token + Telegram OAuth + Mini App ---
 
 import { setToken, setClientUuid, setAdmin, api } from "./api.js";
 
 export async function initAuth() {
+  // 1. Check if running as Telegram Mini App
+  const tg = window.Telegram?.WebApp;
+  if (tg?.initData) {
+    try {
+      const resp = await fetch("/api/auth/telegram-webapp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ initData: tg.initData }),
+      });
+      const data = await resp.json();
+      if (data.token && data.client_uuid) {
+        setToken(data.token);
+        setClientUuid(data.client_uuid);
+        setAdmin(data.admin);
+        tg.ready();
+        tg.expand();
+        return true;
+      }
+    } catch (e) {
+      console.error("Mini App auth failed:", e);
+    }
+  }
+
+  // 2. Check for deep-link token
   const params = new URLSearchParams(location.search);
   const token = params.get("token");
   const tgId = params.get("tg");
@@ -20,7 +44,7 @@ export async function initAuth() {
     }
   }
 
-  // Telegram OAuth callback: #tgAuthResult=...
+  // 3. Telegram OAuth callback: #tgAuthResult=...
   const tgMatch = location.hash.match(/^#tgAuthResult=(.+)/);
   if (tgMatch) {
     try {
