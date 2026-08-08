@@ -12,6 +12,7 @@ let currentSort = "name";
 // --- Modal helpers ---
 function showModal(title, bodyHtml, buttons) {
   return new Promise(resolve => {
+    let resolved = false;
     const overlay = document.createElement("div");
     overlay.className = "modal-overlay";
     overlay.innerHTML = `
@@ -26,13 +27,17 @@ function showModal(title, bodyHtml, buttons) {
         </div>
       </div>`;
     // Delay adding to DOM to prevent immediate click bubbling
-    requestAnimationFrame(() => {
+    setTimeout(() => {
       document.body.appendChild(overlay);
-    });
+      // Focus first input if exists
+      const input = overlay.querySelector("input");
+      if (input) input.focus();
+    }, 50);
     overlay.addEventListener("click", e => {
+      if (resolved) return;
       const btn = e.target.closest("[data-idx]");
-      if (btn) { overlay.remove(); resolve(parseInt(btn.dataset.idx)); }
-      else if (e.target === overlay) { overlay.remove(); resolve(-1); }
+      if (btn) { resolved = true; overlay.remove(); resolve(parseInt(btn.dataset.idx)); }
+      else if (e.target === overlay) { resolved = true; overlay.remove(); resolve(-1); }
     });
   });
 }
