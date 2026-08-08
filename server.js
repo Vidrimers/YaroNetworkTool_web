@@ -323,7 +323,38 @@ app.post("/api/extension-requests/create", verifyToken, async (req, res) => {
   if (!req.user.admin && req.body.client_uuid !== req.user.client_uuid) {
     return res.status(403).json({ message: "Can only create request for yourself" });
   }
-  try { res.json(await vpsAPI("POST", "/api/extension-requests/create", req.body)); } catch (err) { res.status(500).json({ message: err.message }); }
+  try {
+    const result = await vpsAPI("POST", "/api/extension-requests/create", req.body);
+    
+    // Send Telegram notification to admin
+    if (result.success && TELEGRAM_BOT_TOKEN && TELEGRAM_ADMIN_ID) {
+      try {
+        const months = req.body.requested_months || 1;
+        const clientData = await vpsAPI("GET", `/api/clients/${req.body.client_uuid}`);
+        const clientName = clientData.client?.name || "Неизвестный";
+        
+        const message = `🔔 <b>Новый запрос на продление</b>\n\n` +
+          `👤 Клиент: ${clientName}\n` +
+          `🆔 UUID: <code>${req.body.client_uuid}</code>\n` +
+          `📅 Запрошено: ${months} мес.\n` +
+          `🌐 Источник: Веб-панель`;
+        
+        await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: TELEGRAM_ADMIN_ID,
+            text: message,
+            parse_mode: "HTML"
+          })
+        });
+      } catch (tgErr) {
+        console.error("Ошибка отправки уведомления в Telegram:", tgErr.message);
+      }
+    }
+    
+    res.json(result);
+  } catch (err) { res.status(500).json({ message: err.message }); }
 });
 app.post("/api/extension-requests/:id/approve", verifyToken, requireAdmin, async (req, res) => {
   try { res.json(await vpsAPI("POST", `/api/extension-requests/${req.params.id}/approve`, req.body)); } catch (err) { res.status(500).json({ message: err.message }); }
