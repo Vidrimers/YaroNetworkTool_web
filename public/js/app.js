@@ -87,8 +87,18 @@ function showApp() {
   });
 
   // Hamburger toggle
-  document.getElementById("hamburger").addEventListener("click", () => {
+  document.getElementById("hamburger").addEventListener("click", (e) => {
+    e.stopPropagation();
     document.getElementById("navLinks").classList.toggle("open");
+  });
+
+  // Close menu when clicking outside
+  document.addEventListener("click", (e) => {
+    const navLinks = document.getElementById("navLinks");
+    const hamburger = document.getElementById("hamburger");
+    if (navLinks.classList.contains("open") && !navLinks.contains(e.target) && !hamburger.contains(e.target)) {
+      navLinks.classList.remove("open");
+    }
   });
 
   // Logout
