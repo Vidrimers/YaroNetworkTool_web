@@ -83,13 +83,16 @@ function showApp() {
       navigate(a.dataset.page);
       // Close mobile menu after nav
       document.getElementById("navLinks").classList.remove("open");
+      document.body.style.overflow = "";
     });
   });
 
   // Hamburger toggle
   document.getElementById("hamburger").addEventListener("click", (e) => {
     e.stopPropagation();
-    document.getElementById("navLinks").classList.toggle("open");
+    const navLinks = document.getElementById("navLinks");
+    navLinks.classList.toggle("open");
+    document.body.style.overflow = navLinks.classList.contains("open") ? "hidden" : "";
   });
 
   // Close menu when clicking outside
@@ -98,6 +101,7 @@ function showApp() {
     const hamburger = document.getElementById("hamburger");
     if (navLinks.classList.contains("open") && !navLinks.contains(e.target) && !hamburger.contains(e.target)) {
       navLinks.classList.remove("open");
+      document.body.style.overflow = "";
     }
   });
 
