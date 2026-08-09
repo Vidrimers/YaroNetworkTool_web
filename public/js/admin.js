@@ -26,16 +26,22 @@ function showModal(title, bodyHtml, buttons) {
           ).join("")}
         </div>
       </div>`;
+    console.log("[MODAL] Creating overlay for:", title);
     document.body.appendChild(overlay);
+    console.log("[MODAL] Overlay appended to DOM");
     const input = overlay.querySelector("input");
     if (input) input.focus();
-    // Ignore clicks on overlay background for 300ms to prevent accidental close
-    const createdAt = Date.now();
     overlay.addEventListener("click", e => {
+      console.log("[MODAL] Click detected:", { target: e.target.tagName, targetClass: e.target.className, dataIdx: e.target.dataset?.idx, closestIdx: e.target.closest("[data-idx]")?.dataset?.idx, isOverlay: e.target === overlay, resolved });
       if (resolved) return;
       const btn = e.target.closest("[data-idx]");
-      if (btn) { resolved = true; overlay.remove(); resolve(parseInt(btn.dataset.idx)); }
-      else if (e.target === overlay && Date.now() - createdAt > 300) { resolved = true; overlay.remove(); resolve(-1); }
+      if (btn) { console.log("[MODAL] Button clicked, resolving with:", parseInt(btn.dataset.idx)); resolved = true; overlay.remove(); resolve(parseInt(btn.dataset.idx)); }
+      else if (e.target === overlay) { console.log("[MODAL] Overlay clicked, resolving with -1"); resolved = true; overlay.remove(); resolve(-1); }
+      else { console.log("[MODAL] Click ignored - not on button or overlay"); }
+    });
+    // Also listen for mousedown to catch early clicks
+    overlay.addEventListener("mousedown", e => {
+      console.log("[MODAL] Mousedown detected:", { target: e.target.tagName, targetClass: e.target.className });
     });
   });
 }
