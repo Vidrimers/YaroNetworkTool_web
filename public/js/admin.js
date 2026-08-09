@@ -304,7 +304,7 @@ async function showClientModal(uuid) {
         toast("Клиент заблокирован");
         modal.remove(); refreshClients();
       } else if (act === "sub-url") {
-        const subUrl = `https://${location.hostname}/subscription/${uuid}`;
+        const subUrl = `https://1xbetlineboom.xyz/subscription/${uuid}`;
         navigator.clipboard.writeText(subUrl).then(() => toast("Ссылка скопирована"));
       } else if (act === "sub-links") {
         const data = await adminAPI("GET", `/subscription/${uuid}`);
