@@ -13,31 +13,30 @@ let currentSort = "name";
 function showModal(title, bodyHtml, buttons) {
   return new Promise(resolve => {
     let resolved = false;
-    // Delay modal creation to avoid click bubbling
-    setTimeout(() => {
-      const overlay = document.createElement("div");
-      overlay.className = "modal-overlay";
-      overlay.innerHTML = `
-        <div class="modal-box" style="position:relative">
-          <h2>${esc(title)}</h2>
-          <button class="modal-close" data-idx="-1">&times;</button>
-          <div>${bodyHtml}</div>
-          <div class="flex gap-8 mt-12 flex-wrap">
-            ${(buttons || [{ text: "Закрыть", cls: "btn-secondary" }]).map((b, i) =>
-              `<button class="btn btn-sm ${b.cls}" data-idx="${i}">${esc(b.text)}</button>`
-            ).join("")}
-          </div>
-        </div>`;
-      document.body.appendChild(overlay);
-      const input = overlay.querySelector("input");
-      if (input) input.focus();
-      overlay.addEventListener("click", e => {
-        if (resolved) return;
-        const btn = e.target.closest("[data-idx]");
-        if (btn) { resolved = true; overlay.remove(); resolve(parseInt(btn.dataset.idx)); }
-        else if (e.target === overlay) { resolved = true; overlay.remove(); resolve(-1); }
-      });
-    }, 150);
+    const overlay = document.createElement("div");
+    overlay.className = "modal-overlay";
+    overlay.innerHTML = `
+      <div class="modal-box" style="position:relative">
+        <h2>${esc(title)}</h2>
+        <button class="modal-close" data-idx="-1">&times;</button>
+        <div>${bodyHtml}</div>
+        <div class="flex gap-8 mt-12 flex-wrap">
+          ${(buttons || [{ text: "Закрыть", cls: "btn-secondary" }]).map((b, i) =>
+            `<button class="btn btn-sm ${b.cls}" data-idx="${i}">${esc(b.text)}</button>`
+          ).join("")}
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    const input = overlay.querySelector("input");
+    if (input) input.focus();
+    // Ignore clicks on overlay background for 300ms to prevent accidental close
+    const createdAt = Date.now();
+    overlay.addEventListener("click", e => {
+      if (resolved) return;
+      const btn = e.target.closest("[data-idx]");
+      if (btn) { resolved = true; overlay.remove(); resolve(parseInt(btn.dataset.idx)); }
+      else if (e.target === overlay && Date.now() - createdAt > 300) { resolved = true; overlay.remove(); resolve(-1); }
+    });
   });
 }
 
