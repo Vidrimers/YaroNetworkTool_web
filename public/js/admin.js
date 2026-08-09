@@ -15,6 +15,7 @@ function showModal(title, bodyHtml, buttons) {
     let resolved = false;
     const overlay = document.createElement("div");
     overlay.className = "modal-overlay";
+    overlay.style.pointerEvents = "none"; // Disable clicks initially
     overlay.innerHTML = `
       <div class="modal-box" style="position:relative">
         <h2>${esc(title)}</h2>
@@ -26,13 +27,13 @@ function showModal(title, bodyHtml, buttons) {
           ).join("")}
         </div>
       </div>`;
-    // Delay adding to DOM to prevent immediate click bubbling
+    document.body.appendChild(overlay);
+    // Re-enable clicks after a short delay
     setTimeout(() => {
-      document.body.appendChild(overlay);
-      // Focus first input if exists
+      overlay.style.pointerEvents = "";
       const input = overlay.querySelector("input");
       if (input) input.focus();
-    }, 50);
+    }, 100);
     overlay.addEventListener("click", e => {
       if (resolved) return;
       const btn = e.target.closest("[data-idx]");
