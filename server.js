@@ -332,15 +332,15 @@ app.post("/api/extension-requests/:id/deny", verifyToken, requireAdmin, async (r
   try { res.json(await vpsAPI("POST", `/api/extension-requests/${req.params.id}/deny`, req.body)); } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-// --- Xray service management (admin only, proxied to VPS) ---
+// --- Xray service management (admin only, proxied to AdminUI) ---
 app.get("/api/xray/status", verifyToken, requireAdmin, async (req, res) => {
-  try { res.json(await vpsAPI("GET", "/api/xray/status")); } catch (err) { res.status(500).json({ message: err.message }); }
+  try { res.json(await adminUIAPI("GET", "/api/xray/status")); } catch (err) { res.status(500).json({ message: err.message }); }
 });
 app.post("/api/xray/service/:action", verifyToken, requireAdmin, async (req, res) => {
-  try { res.json(await vpsAPI("POST", `/api/xray/service/${req.params.action}`)); } catch (err) { res.status(500).json({ message: err.message }); }
+  try { res.json(await adminUIAPI("POST", `/api/xray/service/${req.params.action}`)); } catch (err) { res.status(500).json({ message: err.message }); }
 });
 app.get("/api/xray/logs", verifyToken, requireAdmin, async (req, res) => {
-  try { res.json(await vpsAPI("GET", "/api/xray/logs")); } catch (err) { res.status(500).json({ message: err.message }); }
+  try { res.json(await adminUIAPI("GET", "/api/xray/logs")); } catch (err) { res.status(500).json({ message: err.message }); }
 });
 app.post("/api/xray/checkers/:script", verifyToken, requireAdmin, async (req, res) => {
   try { res.json(await adminUIAPI("POST", `/api/xray/checkers/${req.params.script}`)); } catch (err) { res.status(500).json({ message: err.message }); }
