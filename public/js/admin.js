@@ -32,34 +32,41 @@ function showModal(title, bodyHtml, buttons) {
     const input = overlay.querySelector("input");
     if (input) input.focus();
     overlay.addEventListener("click", e => {
-      console.log("[MODAL] Click detected:", { target: e.target.tagName, targetClass: e.target.className, dataIdx: e.target.dataset?.idx, closestIdx: e.target.closest("[data-idx]")?.dataset?.idx, isOverlay: e.target === overlay, resolved });
       if (resolved) return;
       const btn = e.target.closest("[data-idx]");
-      if (btn) { console.log("[MODAL] Button clicked, resolving with:", parseInt(btn.dataset.idx)); resolved = true; overlay.remove(); resolve(parseInt(btn.dataset.idx)); }
-      else if (e.target === overlay) { console.log("[MODAL] Overlay clicked, resolving with -1"); resolved = true; overlay.remove(); resolve(-1); }
-      else { console.log("[MODAL] Click ignored - not on button or overlay"); }
-    });
-    // Also listen for mousedown to catch early clicks
-    overlay.addEventListener("mousedown", e => {
-      console.log("[MODAL] Mousedown detected:", { target: e.target.tagName, targetClass: e.target.className });
+      if (btn) {
+        resolved = true;
+        // Read input values BEFORE removing overlay
+        const inputs = {};
+        overlay.querySelectorAll("input, textarea, select").forEach(el => {
+          if (el.id) inputs[el.id] = el.value;
+        });
+        overlay.remove();
+        resolve({ idx: parseInt(btn.dataset.idx), inputs });
+      }
+      else if (e.target === overlay) {
+        resolved = true;
+        overlay.remove();
+        resolve({ idx: -1, inputs: {} });
+      }
     });
   });
 }
 
 async function promptModal(title, placeholder, def = "") {
-  const idx = await showModal(title, `
+  const result = await showModal(title, `
     <input type="text" class="form-control" id="_modalInput" value="${esc(def)}" placeholder="${esc(placeholder)}">
   `, [{ text: "Отмена", cls: "btn-secondary" }, { text: "OK", cls: "btn-success" }]);
-  if (idx !== 1) return null;
-  return document.getElementById("_modalInput")?.value || null;
+  if (result.idx !== 1) return null;
+  return result.inputs["_modalInput"] || null;
 }
 
 async function confirmModal(title, msg) {
-  const idx = await showModal(title, msg ? `<p>${esc(msg)}</p>` : "", [
+  const result = await showModal(title, msg ? `<p>${esc(msg)}</p>` : "", [
     { text: "Отмена", cls: "btn-secondary" },
     { text: "Да", cls: "btn-danger" },
   ]);
-  return idx === 1;
+  return result.idx === 1;
 }
 
 function clientPicker(title, clients) {
