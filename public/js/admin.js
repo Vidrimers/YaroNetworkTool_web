@@ -558,14 +558,18 @@ function bindAdminActions() {
         result.querySelectorAll("[data-deny]").forEach(btn => {
           btn.addEventListener("click", async (e) => {
             e.stopPropagation();
+            console.log("[DENY] Button clicked, id=", btn.dataset.deny);
             const reason = await promptModal("Причина отклонения", "", "Отклонено");
+            console.log("[DENY] Modal result:", reason);
             if (reason === null) return;
             try {
               const body = { reason, admin_telegram_id: getTelegramId() };
+              console.log("[DENY] Sending request:", JSON.stringify(body));
               const resp = await adminAPI("POST", `/extension-requests/${btn.dataset.deny}/deny`, body);
+              console.log("[DENY] Response:", resp);
               if (resp?.success) { toast("Запрос отклонён"); } else { toast("Ошибка: " + (resp?.error || resp?.message || "неизвестно"), "error"); }
               refreshClients();
-            } catch(e) { toast("Ошибка: " + e.message, "error"); }
+            } catch(e) { console.error("[DENY] Error:", e); toast("Ошибка: " + e.message, "error"); }
           });
         });
       } catch (err) { result.innerHTML = `<p class="text-muted">Ошибка: ${esc(err.message)}</p>`; }
