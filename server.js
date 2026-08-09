@@ -243,6 +243,15 @@ app.get("/api/clients/:uuid/traffic-stats", verifyToken, requireOwnershipOrAdmin
   }
 });
 
+// Active devices (any authenticated user)
+app.get("/api/stats/devices", verifyToken, async (req, res) => {
+  try {
+    res.json(await vpsAPI("GET", "/api/stats/devices"));
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 // Subscription (own data or admin)
 app.get("/api/clients/:uuid/subscription", verifyToken, requireOwnershipOrAdmin, async (req, res) => {
   try {

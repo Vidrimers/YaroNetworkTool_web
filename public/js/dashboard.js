@@ -16,15 +16,18 @@ export async function renderDashboard(el) {
   el.innerHTML = '<p class="text-muted">Загрузка...</p>';
 
   try {
-    const [clientRes, subRes, statsRes] = await Promise.all([
+    const [clientRes, subRes, statsRes, devicesRes] = await Promise.all([
       api("GET", `/api/clients/${uuid}`),
       api("GET", `/api/clients/${uuid}/subscription`),
       api("GET", `/api/clients/${uuid}/traffic-stats`).catch(() => null),
+      api("GET", `/api/stats/devices`).catch(() => null),
     ]);
 
     const c = clientRes?.client || clientRes || {};
     const sub = subRes?.subscription || subRes || {};
     const ts = statsRes?.stats || {};
+    const devices = devicesRes?.devices || {};
+    const activeDevices = devices[uuid]?.count ?? null;
 
     const status = c.status || "active";
     const statusMap = { active: ["active", "Активен"], blocked: ["blocked", "Заблокирован"], expired: ["expired", "Истёк"] };
@@ -61,7 +64,7 @@ export async function renderDashboard(el) {
       </div>
 
       <div class="card">
-        <div class="card-row"><span class="label">Устройства</span><span class="value">${c.active_devices ?? "N/A"} / ${c.max_devices || 2}</span></div>
+        <div class="card-row"><span class="label">Устройства</span><span class="value">${activeDevices ?? "N/A"} / ${c.max_devices || 2}</span></div>
         <div class="card-row"><span class="label">Предупреждения</span><span class="value">${c.warnings_count || 0} / 3</span></div>
       </div>
     `;
