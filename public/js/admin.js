@@ -13,34 +13,31 @@ let currentSort = "name";
 function showModal(title, bodyHtml, buttons) {
   return new Promise(resolve => {
     let resolved = false;
-    let canClose = false; // Prevent closing for first 200ms
-    const overlay = document.createElement("div");
-    overlay.className = "modal-overlay";
-    overlay.innerHTML = `
-      <div class="modal-box" style="position:relative">
-        <h2>${esc(title)}</h2>
-        <button class="modal-close" data-idx="-1">&times;</button>
-        <div>${bodyHtml}</div>
-        <div class="flex gap-8 mt-12 flex-wrap">
-          ${(buttons || [{ text: "Закрыть", cls: "btn-secondary" }]).map((b, i) =>
-            `<button class="btn btn-sm ${b.cls}" data-idx="${i}">${esc(b.text)}</button>`
-          ).join("")}
-        </div>
-      </div>`;
-    document.body.appendChild(overlay);
-    // Allow closing after 200ms
+    // Delay modal creation to avoid click bubbling
     setTimeout(() => {
-      canClose = true;
+      const overlay = document.createElement("div");
+      overlay.className = "modal-overlay";
+      overlay.innerHTML = `
+        <div class="modal-box" style="position:relative">
+          <h2>${esc(title)}</h2>
+          <button class="modal-close" data-idx="-1">&times;</button>
+          <div>${bodyHtml}</div>
+          <div class="flex gap-8 mt-12 flex-wrap">
+            ${(buttons || [{ text: "Закрыть", cls: "btn-secondary" }]).map((b, i) =>
+              `<button class="btn btn-sm ${b.cls}" data-idx="${i}">${esc(b.text)}</button>`
+            ).join("")}
+          </div>
+        </div>`;
+      document.body.appendChild(overlay);
       const input = overlay.querySelector("input");
       if (input) input.focus();
-    }, 200);
-    overlay.addEventListener("click", e => {
-      if (resolved) return;
-      if (!canClose) return; // Prevent immediate close
-      const btn = e.target.closest("[data-idx]");
-      if (btn) { resolved = true; overlay.remove(); resolve(parseInt(btn.dataset.idx)); }
-      else if (e.target === overlay) { resolved = true; overlay.remove(); resolve(-1); }
-    });
+      overlay.addEventListener("click", e => {
+        if (resolved) return;
+        const btn = e.target.closest("[data-idx]");
+        if (btn) { resolved = true; overlay.remove(); resolve(parseInt(btn.dataset.idx)); }
+        else if (e.target === overlay) { resolved = true; overlay.remove(); resolve(-1); }
+      });
+    }, 150);
   });
 }
 
