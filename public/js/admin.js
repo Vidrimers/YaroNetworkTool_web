@@ -13,9 +13,9 @@ let currentSort = "name";
 function showModal(title, bodyHtml, buttons) {
   return new Promise(resolve => {
     let resolved = false;
+    let canClose = false; // Prevent closing for first 200ms
     const overlay = document.createElement("div");
     overlay.className = "modal-overlay";
-    overlay.style.pointerEvents = "none"; // Disable clicks initially
     overlay.innerHTML = `
       <div class="modal-box" style="position:relative">
         <h2>${esc(title)}</h2>
@@ -28,14 +28,15 @@ function showModal(title, bodyHtml, buttons) {
         </div>
       </div>`;
     document.body.appendChild(overlay);
-    // Re-enable clicks after a short delay
+    // Allow closing after 200ms
     setTimeout(() => {
-      overlay.style.pointerEvents = "";
+      canClose = true;
       const input = overlay.querySelector("input");
       if (input) input.focus();
-    }, 100);
+    }, 200);
     overlay.addEventListener("click", e => {
       if (resolved) return;
+      if (!canClose) return; // Prevent immediate close
       const btn = e.target.closest("[data-idx]");
       if (btn) { resolved = true; overlay.remove(); resolve(parseInt(btn.dataset.idx)); }
       else if (e.target === overlay) { resolved = true; overlay.remove(); resolve(-1); }
