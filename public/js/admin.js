@@ -546,7 +546,7 @@ function bindAdminActions() {
         result.querySelectorAll("[data-approve-custom]").forEach(btn => {
           btn.addEventListener("click", async (e) => {
             e.stopPropagation();
-            const days = window.prompt("Сколько дней?", "30");
+            const days = await promptModal("Сколько дней?", "30");
             if (!days) return;
             try {
               const resp = await adminAPI("POST", `/extension-requests/${btn.dataset.approveCustom}/approve`, { approved_days: parseInt(days), admin_telegram_id: getTelegramId() });
@@ -558,17 +558,14 @@ function bindAdminActions() {
         result.querySelectorAll("[data-deny]").forEach(btn => {
           btn.addEventListener("click", async (e) => {
             e.stopPropagation();
-            console.log("[DENY] clicked, id=", btn.dataset.deny, "telegram_id=", getTelegramId());
-            const reason = window.prompt("Причина отклонения:", "Отклонено");
-            if (reason === null) { console.log("[DENY] cancelled"); return; }
+            const reason = await promptModal("Причина отклонения", "", "Отклонено");
+            if (reason === null) return;
             try {
               const body = { reason, admin_telegram_id: getTelegramId() };
-              console.log("[DENY] sending:", JSON.stringify(body));
               const resp = await adminAPI("POST", `/extension-requests/${btn.dataset.deny}/deny`, body);
-              console.log("[DENY] response:", resp);
               if (resp?.success) { toast("Запрос отклонён"); } else { toast("Ошибка: " + (resp?.error || resp?.message || "неизвестно"), "error"); }
               refreshClients();
-            } catch(e) { console.error("[DENY] error:", e); toast("Ошибка: " + e.message, "error"); }
+            } catch(e) { toast("Ошибка: " + e.message, "error"); }
           });
         });
       } catch (err) { result.innerHTML = `<p class="text-muted">Ошибка: ${esc(err.message)}</p>`; }
