@@ -580,7 +580,6 @@ function bindAdminActions() {
       } catch (err) { result.innerHTML = `<p class="text-muted">Ошибка: ${esc(err.message)}</p>`; }
     } else if (act === "requests") {
       await loadRequests();
-      }
     }
   });
 }
