@@ -357,6 +357,98 @@ async function refreshClients() {
   renderClientList();
 }
 
+async function loadRequests() {
+  const result = document.getElementById("adminActionResult");
+  result.innerHTML = '<p class="text-muted">Загрузка запросов...</p>';
+  try {
+    const data = await adminAPI("GET", "/extension-requests");
+    const requests = data?.requests || [];
+    const pending = requests.filter(r => r.status === "pending");
+    const approved = requests.filter(r => r.status === "approved");
+    const denied = requests.filter(r => r.status === "denied");
+
+    let html = `
+      <div class="flex gap-8 flex-wrap mb-8">
+        <span class="badge badge-expired">Ожидают: ${pending.length}</span>
+        <span class="badge badge-active">Одобрено: ${approved.length}</span>
+        <span class="badge badge-blocked">Отклонено: ${denied.length}</span>
+      </div>`;
+
+    if (pending.length) {
+      html += '<h3 style="font-size:1em;margin-bottom:10px;color:#ff9800">Ожидают обработки</h3>';
+      html += pending.slice(0, 10).map(r => `
+        <div class="card-row" style="flex-direction:column;gap:8px">
+          <div class="flex justify-between items-center">
+            <span><b>${esc(r.client_name || "Unknown")}</b> — ${r.requested_days || r.requested_months * 30} дн.</span>
+            <span class="text-muted" style="font-size:.8em">${new Date(r.created_at).toLocaleDateString("ru-RU")}</span>
+          </div>
+          <div class="flex gap-8">
+            <button class="btn btn-sm btn-success" data-approve="${r.id}">Одобрить</button>
+            <button class="btn btn-sm btn-secondary" data-approve-custom="${r.id}">Свой срок</button>
+            <button class="btn btn-sm btn-danger" data-deny="${r.id}">Отклонить</button>
+          </div>
+        </div>`).join("");
+    }
+
+    if (approved.length) {
+      html += '<h3 style="font-size:1em;margin:15px 0 10px;color:#4caf50">Одобренные (последние 5)</h3>';
+      html += approved.slice(0, 5).map(r => `
+        <div class="card-row">
+          <span>${esc(r.client_name || "Unknown")} — ${r.approved_days || r.requested_days} дн.</span>
+          <span class="text-muted" style="font-size:.8em">${new Date(r.processed_at).toLocaleDateString("ru-RU")}</span>
+        </div>`).join("");
+    }
+
+    if (denied.length) {
+      html += '<h3 style="font-size:1em;margin:15px 0 10px;color:#f44336">Отклонённые (последние 5)</h3>';
+      html += denied.slice(0, 5).map(r => `
+        <div class="card-row">
+          <span>${esc(r.client_name || "Unknown")} — ${r.denial_reason || "Без причины"}</span>
+          <span class="text-muted" style="font-size:.8em">${new Date(r.processed_at).toLocaleDateString("ru-RU")}</span>
+        </div>`).join("");
+    }
+
+    result.innerHTML = html;
+
+    // Bind approve/deny buttons
+    result.querySelectorAll("[data-approve]").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        if (!await confirmModal("Одобрить запрос?", "")) return;
+        try {
+          const resp = await adminAPI("POST", `/extension-requests/${btn.dataset.approve}/approve`, { admin_telegram_id: getTelegramId() });
+          if (resp?.success) { toast("Запрос одобрен"); } else { toast("Ошибка: " + (resp?.error || resp?.message || "неизвестно"), "error"); }
+          await loadRequests();
+        } catch(e) { toast("Ошибка: " + e.message, "error"); }
+      });
+    });
+    result.querySelectorAll("[data-approve-custom]").forEach(btn => {
+      btn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        const days = await promptModal("Сколько дней?", "30");
+        if (!days) return;
+        try {
+          const resp = await adminAPI("POST", `/extension-requests/${btn.dataset.approveCustom}/approve`, { approved_days: parseInt(days), admin_telegram_id: getTelegramId() });
+          if (resp?.success) { toast("Одобрено"); } else { toast("Ошибка: " + (resp?.error || resp?.message || "неизвестно"), "error"); }
+          await loadRequests();
+        } catch(e) { toast("Ошибка: " + e.message, "error"); }
+      });
+    });
+    result.querySelectorAll("[data-deny]").forEach(btn => {
+      btn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        const reason = await promptModal("Причина отклонения", "Оставь пустым если без причины", "");
+        if (reason === null) return;
+        try {
+          const body = { reason: reason || null, admin_telegram_id: getTelegramId() };
+          const resp = await adminAPI("POST", `/extension-requests/${btn.dataset.deny}/deny`, body);
+          if (resp?.success) { toast("Запрос отклонён"); } else { toast("Ошибка: " + (resp?.error || resp?.message || "неизвестно"), "error"); }
+          await loadRequests();
+        } catch(e) { toast("Ошибка: " + e.message, "error"); }
+      });
+    });
+  } catch (err) { result.innerHTML = `<p class="text-muted">Ошибка: ${esc(err.message)}</p>`; }
+}
+
 function bindServiceButtons() {
   document.getElementById("adminServiceBtns")?.addEventListener("click", async e => {
     const action = e.target.dataset.action;
@@ -487,98 +579,8 @@ function bindAdminActions() {
         result.innerHTML = `<pre style="background:rgba(0,0,0,.3);padding:12px;border-radius:8px;max-height:300px;overflow:auto;font-size:.85em;color:#a0a0a0;white-space:pre-wrap">${esc(resp?.output || "Нет вывода")}</pre>`;
       } catch (err) { result.innerHTML = `<p class="text-muted">Ошибка: ${esc(err.message)}</p>`; }
     } else if (act === "requests") {
-      result.innerHTML = '<p class="text-muted">Загрузка запросов...</p>';
-      try {
-        const data = await adminAPI("GET", "/extension-requests");
-        const requests = data?.requests || [];
-        const pending = requests.filter(r => r.status === "pending");
-        const approved = requests.filter(r => r.status === "approved");
-        const denied = requests.filter(r => r.status === "denied");
-
-        let html = `
-          <div class="flex gap-8 flex-wrap mb-8">
-            <span class="badge badge-expired">Ожидают: ${pending.length}</span>
-            <span class="badge badge-active">Одобрено: ${approved.length}</span>
-            <span class="badge badge-blocked">Отклонено: ${denied.length}</span>
-          </div>`;
-
-        if (pending.length) {
-          html += '<h3 style="font-size:1em;margin-bottom:10px;color:#ff9800">Ожидают обработки</h3>';
-          html += pending.slice(0, 10).map(r => `
-            <div class="card-row" style="flex-direction:column;gap:8px">
-              <div class="flex justify-between items-center">
-                <span><b>${esc(r.client_name || "Unknown")}</b> — ${r.requested_days || r.requested_months * 30} дн.</span>
-                <span class="text-muted" style="font-size:.8em">${new Date(r.created_at).toLocaleDateString("ru-RU")}</span>
-              </div>
-              <div class="flex gap-8">
-                <button class="btn btn-sm btn-success" data-approve="${r.id}">Одобрить</button>
-                <button class="btn btn-sm btn-secondary" data-approve-custom="${r.id}">Свой срок</button>
-                <button class="btn btn-sm btn-danger" data-deny="${r.id}">Отклонить</button>
-              </div>
-            </div>`).join("");
-        }
-
-        if (approved.length) {
-          html += '<h3 style="font-size:1em;margin:15px 0 10px;color:#4caf50">Одобренные (последние 5)</h3>';
-          html += approved.slice(0, 5).map(r => `
-            <div class="card-row">
-              <span>${esc(r.client_name || "Unknown")} — ${r.approved_days || r.requested_days} дн.</span>
-              <span class="text-muted" style="font-size:.8em">${new Date(r.processed_at).toLocaleDateString("ru-RU")}</span>
-            </div>`).join("");
-        }
-
-        if (denied.length) {
-          html += '<h3 style="font-size:1em;margin:15px 0 10px;color:#f44336">Отклонённые (последние 5)</h3>';
-          html += denied.slice(0, 5).map(r => `
-            <div class="card-row">
-              <span>${esc(r.client_name || "Unknown")} — ${r.denial_reason || "Без причины"}</span>
-              <span class="text-muted" style="font-size:.8em">${new Date(r.processed_at).toLocaleDateString("ru-RU")}</span>
-            </div>`).join("");
-        }
-
-        result.innerHTML = html;
-
-        // Bind approve/deny buttons
-        result.querySelectorAll("[data-approve]").forEach(btn => {
-          btn.addEventListener("click", async () => {
-            console.log("[APPROVE] clicked, id=", btn.dataset.approve, "telegram_id=", getTelegramId());
-            if (!await confirmModal("Одобрить запрос?", "")) { console.log("[APPROVE] cancelled"); return; }
-            try {
-              const body = { admin_telegram_id: getTelegramId() };
-              console.log("[APPROVE] sending:", JSON.stringify(body));
-              const resp = await adminAPI("POST", `/extension-requests/${btn.dataset.approve}/approve`, body);
-              console.log("[APPROVE] response:", resp);
-              if (resp?.success) { toast("Запрос одобрен"); } else { toast("Ошибка: " + (resp?.error || resp?.message || "неизвестно"), "error"); }
-              refreshClients();
-            } catch(e) { console.error("[APPROVE] error:", e); toast("Ошибка: " + e.message, "error"); }
-          });
-        });
-        result.querySelectorAll("[data-approve-custom]").forEach(btn => {
-          btn.addEventListener("click", async (e) => {
-            e.stopPropagation();
-            const days = await promptModal("Сколько дней?", "30");
-            if (!days) return;
-            try {
-              const resp = await adminAPI("POST", `/extension-requests/${btn.dataset.approveCustom}/approve`, { approved_days: parseInt(days), admin_telegram_id: getTelegramId() });
-              if (resp?.success) { toast("Одобрено"); } else { toast("Ошибка: " + (resp?.error || resp?.message || "неизвестно"), "error"); }
-              refreshClients();
-            } catch(e) { toast("Ошибка: " + e.message, "error"); }
-          });
-        });
-        result.querySelectorAll("[data-deny]").forEach(btn => {
-          btn.addEventListener("click", async (e) => {
-            e.stopPropagation();
-            const reason = await promptModal("Причина отклонения", "Оставь пустым если без причины", "");
-            if (reason === null) return; // Отмена
-            try {
-              const body = { reason: reason || null, admin_telegram_id: getTelegramId() };
-              const resp = await adminAPI("POST", `/extension-requests/${btn.dataset.deny}/deny`, body);
-              if (resp?.success) { toast("Запрос отклонён"); } else { toast("Ошибка: " + (resp?.error || resp?.message || "неизвестно"), "error"); }
-              refreshClients();
-            } catch(e) { toast("Ошибка: " + e.message, "error"); }
-          });
-        });
-      } catch (err) { result.innerHTML = `<p class="text-muted">Ошибка: ${esc(err.message)}</p>`; }
+      await loadRequests();
+      }
     }
   });
 }
