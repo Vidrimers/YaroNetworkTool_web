@@ -57,8 +57,8 @@ async function promptModal(title, placeholder, def = "") {
   const result = await showModal(title, `
     <input type="text" class="form-control" id="_modalInput" value="${esc(def)}" placeholder="${esc(placeholder)}">
   `, [{ text: "Отмена", cls: "btn-secondary" }, { text: "OK", cls: "btn-success" }]);
-  if (result.idx !== 1) return null;
-  return result.inputs["_modalInput"] || null;
+  if (result.idx !== 1) return null; // Отмена = null
+  return result.inputs["_modalInput"] ?? ""; // OK = значение (даже пустое)
 }
 
 async function confirmModal(title, msg) {
@@ -569,7 +569,7 @@ function bindAdminActions() {
           btn.addEventListener("click", async (e) => {
             e.stopPropagation();
             const reason = await promptModal("Причина отклонения", "Оставь пустым если без причины", "");
-            if (reason === null) return;
+            if (reason === null) return; // Отмена
             try {
               const body = { reason: reason || null, admin_telegram_id: getTelegramId() };
               const resp = await adminAPI("POST", `/extension-requests/${btn.dataset.deny}/deny`, body);
