@@ -27,7 +27,7 @@ export async function renderDashboard(el) {
     const sub = subRes?.subscription || subRes || {};
     const ts = statsRes?.stats || {};
     const devices = devicesRes?.devices || {};
-    const activeDevices = devices[uuid]?.count ?? null;
+    const activeDevices = devices[uuid]?.count ?? 0;
 
     const status = c.status || "active";
     const statusMap = { active: ["active", "Активен"], blocked: ["blocked", "Заблокирован"], expired: ["expired", "Истёк"] };
